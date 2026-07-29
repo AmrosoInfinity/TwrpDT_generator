@@ -5,14 +5,18 @@ import requests
 import glob
 from pyrogram import Client, filters
 
-# Mengambil konfigurasi dari GitHub Secrets
+# ==============================================================================
+# KONFIGURASI ENVIRONMENT VARIABLES (Dari GitHub Secrets)
+# ==============================================================================
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GITHUB_USERNAME = os.environ.get("GH_USERNAME")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN")
 
-# Inisialisasi Userbot menggunakan Session String
+# ==============================================================================
+# INISIALISASI USERBOT
+# ==============================================================================
 app = Client(
     "twrp_userbot",
     session_string=SESSION_STRING,
@@ -20,80 +24,89 @@ app = Client(
     api_hash=API_HASH
 )
 
+# ==============================================================================
+# HANDLER: PERINTAH /START
+# ==============================================================================
 @app.on_message(filters.command("start", prefixes=["/", "."]) & filters.private)
 async def start(client, message):
     teks = (
-        "🤖 **Generator Device Tree TWRP (Userbot Mode AKTIF)**\n\n"
-        "Batas ukuran Telegram API telah ditembus. Sekarang mendukung file hingga 2 GB!\n\n"
+        "🤖 **Generator Device Tree TWRP (Pro Mode)**\n\n"
+        "Sistem ini mendeteksi dan mengekstrak *Device Tree* TWRP dengan kecepatan turbo. "
+        "Karena menggunakan sistem Userbot, batas ukuran file Telegram API telah ditembus, mendukung file raksasa hingga 2 GB!\n\n"
         "**Cara Penggunaan:**\n"
-        "Kirimkan file berekstensi `.img` dan **wajib** ketik `/dt` pada kolom keterangan (caption) dokumen."
+        "Sangat simpel! Langsung saja kirimkan file partisi berekstensi `.img` (misalnya `boot.img`, `recovery.img`) ke obrolan ini, "
+        "dan sistem akan otomatis bekerja."
     )
     await message.reply_text(teks)
 
-# Filter hanya merespons dokumen berekstensi .img dengan caption /dt
+# ==============================================================================
+# HANDLER: DETEKSI FILE .IMG OTOMATIS
+# ==============================================================================
 @app.on_message(filters.document & filters.private)
 async def handle_document(client, message):
-    if not message.caption or message.caption.strip().lower() != "/dt":
-        return
-        
-    if not message.document.file_name.endswith('.img'):
-        await message.reply_text("❌ Harap kirimkan file dengan ekstensi `.img`!")
+    # Pengamanan jika file dokumen tidak memiliki nama
+    file_name = message.document.file_name or ""
+    
+    # SILENT IGNORE: Jika bukan file .img, bot akan diam (agar chat normal tidak terganggu)
+    if not file_name.lower().endswith('.img'):
         return
 
-    msg = await message.reply_text("⏳ Mengunduh file `.img` Anda... \n*(Kecepatan turbo aktif berkat Userbot + tgcrypto)*")
+    msg = await message.reply_text("⏳ **File `.img` terdeteksi!**\nMemulai unduhan... \n*(Kecepatan turbo aktif berkat Userbot + tgcrypto)*")
 
+    work_dir = "workspace"
     try:
-        work_dir = "workspace"
+        # Menyiapkan folder kerja yang bersih
+        if os.path.exists(work_dir):
+            shutil.rmtree(work_dir)
         os.makedirs(work_dir, exist_ok=True)
         
-        # Proses unduh file raksasa
+        # 1. PROSES UNDUH FILE
         file_path = await client.download_media(message, file_name=f"{work_dir}/boot.img")
 
-        await msg.edit_text("⚙️ Mengekstrak Device Tree dengan twrpdtgen...")
+        await msg.edit_text("⚙️ **Mengekstrak Device Tree...**\n*(Memproses file via twrpdtgen)*")
 
         output_dir = os.path.join(work_dir, "output")
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
-        # Proses Ekstrak
+        # 2. PROSES EKSTRAK (twrpdtgen)
         result = subprocess.run(["python3", "-m", "twrpdtgen", file_path, "-o", output_dir], capture_output=True, text=True)
         
         if result.returncode != 0:
-            await msg.edit_text(f"❌ Gagal mengekstrak device tree.\n\nLog:\n`{result.stderr}`")
+            await msg.edit_text(f"❌ **Gagal mengekstrak device tree.**\n\n**Log Error:**\n`{result.stderr}`")
             return
 
-        # Membaca struktur folder output
+        # 3. MEMBACA STRUKTUR FOLDER OUTPUT
         manufacturers = os.listdir(output_dir)
         if not manufacturers:
-            raise Exception("Folder output kosong.")
+            raise Exception("Folder output kosong. Pastikan ini adalah partisi boot/recovery yang valid.")
         manufacturer = manufacturers[0]
         
         codenames = os.listdir(os.path.join(output_dir, manufacturer))
         if not codenames:
-            raise Exception("Tidak dapat menemukan codename perangkat.")
+            raise Exception("Tidak dapat menemukan codename perangkat di dalam boot image.")
         codename = codenames[0]
 
         device_tree_path = os.path.join(output_dir, manufacturer, codename)
         repo_name = f"android_device_{manufacturer}_{codename}"
         
-        await msg.edit_text(f"✅ Ekstraksi berhasil!\n🚀 Membuat repositori dan mengunggah ke GitHub @{GITHUB_USERNAME}...")
+        await msg.edit_text(f"✅ **Ekstraksi berhasil!**\n🚀 Membuat repositori dan mengunggah ke GitHub `@{GITHUB_USERNAME}`...")
 
-        # Membuat repo GitHub via API
+        # 4. MEMBUAT REPOSITORI GITHUB BARU
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Accept": "application/vnd.github.v3+json"
         }
         repo_data = {
             "name": repo_name,
-            "description": f"TWRP Device Tree for {codename} (Auto-generated by Userbot)",
+            "description": f"TWRP Device Tree for {codename} (Auto-generated by Telegram Userbot)",
             "private": False
         }
         
         req = requests.post("https://api.github.com/user/repos", json=repo_data, headers=headers)
-        if req.status_code not in [201, 422]:
-            raise Exception(f"Gagal membuat repositori GitHub: {req.text}")
+        if req.status_code not in [201, 422]:  # 201 Created, 422 Unprocessable Entity (Repo sudah ada)
+            raise Exception(f"Gagal membuat repositori GitHub:\n{req.text}")
 
-        # Git push proses
+        # 5. PUSH SOURCE CODE KE GITHUB (GIT)
         subprocess.run(["git", "config", "--global", "user.email", "userbot@twrpdtgen.local"])
         subprocess.run(["git", "config", "--global", "user.name", "TWRP Userbot"])
         
@@ -107,9 +120,10 @@ async def handle_document(client, message):
         subprocess.run(["git", "remote", "add", "origin", remote_url])
         subprocess.run(["git", "push", "-u", "origin", "main", "--force"])
         
+        # Kembali ke direktori awal server
         os.chdir("../../..")
 
-        # Mencari Build Description dari file .mk
+        # 6. INSPEKSI VARIABEL BUILD DESCRIPTION
         build_desc = "Unknown"
         mk_files = glob.glob(f"{device_tree_path}/*.mk")
         for mk in mk_files:
@@ -121,24 +135,33 @@ async def handle_document(client, message):
                             build_desc = line.split('=')[1].replace('"', '').strip()
                             break
 
+        # 7. FORMAT PESAN HASIL AKHIR
         github_link = f"https://github.com/{GITHUB_USERNAME}/{repo_name}/tree/main"
         
         final_text = (
-            "✅ **TWRP device tree generated!**\n\n"
+            "✅ **TWRP Device Tree Generated!**\n\n"
             f"📱 **Codename:** `{codename}`\n"
             f"🏭 **Manufacturer:** `{manufacturer}`\n"
             f"📋 **Build desc:** `{build_desc}`\n\n"
             f"🔗 **Device tree:** {github_link}"
         )
         
+        # Kirim respons final tanpa pratinjau halaman agar UI tetap bersih
         await msg.edit_text(final_text, disable_web_page_preview=True)
-        shutil.rmtree(work_dir)
 
     except Exception as e:
-        await msg.edit_text(f"❌ Terjadi kesalahan:\n`{str(e)}`")
+        await msg.edit_text(f"❌ **Terjadi kesalahan:**\n`{str(e)}`")
+    
+    finally:
+        # PEMBERSIHAN WORKSPACE (Mencegah storage GitHub Actions kepenuhan)
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir)
 
+# ==============================================================================
+# EKSEKUSI UTAMA
+# ==============================================================================
 if __name__ == "__main__":
-    print("Userbot menyala dan siap menerima file .img!")
+    print("==================================================")
+    print("Userbot TWRP Generator Menyala dan Standby 24/7!")
+    print("==================================================")
     app.run()
