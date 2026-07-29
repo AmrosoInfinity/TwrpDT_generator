@@ -53,7 +53,8 @@ async def start(client, message):
 # ==============================================================================
 # HANDLER: DETEKSI FILE .IMG OTOMATIS
 # ==============================================================================
-@app.on_message(filters.document & (filters.private | filters.group | filters.supergroup))
+# PERBAIKAN: Menghapus filters.supergroup karena filters.group sudah mencakup semuanya
+@app.on_message(filters.document & (filters.private | filters.group))
 async def handle_document(client, message):
     chat_id = message.chat.id
     chat_type = message.chat.type
