@@ -1,0 +1,46 @@
+name: Bot Telegram Standby 24/7
+
+on:
+  schedule:
+    # Berjalan otomatis setiap 5 jam sekali. 
+    # Kita buat 5 jam (bukan 6) untuk menghindari pembunuhan paksa sistem GitHub yang kasar.
+    - cron: '0 */5 * * *'
+  workflow_dispatch: # Memungkinkan Anda memicu bot secara manual
+
+concurrency:
+  group: telegram-bot
+  # Ini SANGAT PENTING. Saat jadwal 5 jam tiba, GitHub akan otomatis 
+  # mematikan bot yang sedang berjalan dan menggantinya dengan sesi baru.
+  cancel-in-progress: true 
+
+jobs:
+  run-bot:
+    name: Running Telegram Polling
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpio lz4 git
+
+      - name: Install Python Requirements
+        run: pip install pyTelegramBotAPI twrpdtgen requests
+
+      - name: Start Telegram Bot
+        env:
+          # Mengambil rahasia dari brankas GitHub dan mengirimnya ke Python
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          echo "Bot mulai berjalan..."
+          python bot_twrp.py
