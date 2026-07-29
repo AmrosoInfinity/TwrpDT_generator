@@ -13,7 +13,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ==============================================================================
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")       
+BP_TOKEN= os.environ.get("BP_TOKEN", "")       
 SESSION_STRING = os.environ.get("SESSION_STRING", "") 
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
@@ -31,7 +31,7 @@ bot_ui = Client(
     "bot_ui_session",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
+    bp_token=BP_TOKEN,
     in_memory=True
 )
 
