@@ -1,21 +1,17 @@
-name: Bot Telegram Standby 24/7
+name: TWRP Userbot Standby 24/7
 
 on:
   schedule:
-    # Berjalan otomatis setiap 5 jam sekali. 
-    # Kita buat 5 jam (bukan 6) untuk menghindari pembunuhan paksa sistem GitHub yang kasar.
     - cron: '0 */5 * * *'
-  workflow_dispatch: # Memungkinkan Anda memicu bot secara manual
+  workflow_dispatch:
 
 concurrency:
-  group: telegram-bot
-  # Ini SANGAT PENTING. Saat jadwal 5 jam tiba, GitHub akan otomatis 
-  # mematikan bot yang sedang berjalan dan menggantinya dengan sesi baru.
+  group: telegram-userbot
   cancel-in-progress: true 
 
 jobs:
-  run-bot:
-    name: Running Telegram Polling
+  run-userbot:
+    name: Running Pyrogram Userbot
     runs-on: ubuntu-22.04
 
     steps:
@@ -33,14 +29,15 @@ jobs:
           sudo apt-get install -y cpio lz4 git
 
       - name: Install Python Requirements
-        run: pip install pyTelegramBotAPI twrpdtgen requests
+        # tgcrypto ditambahkan agar download file besar sangat cepat!
+        run: pip install pyrogram tgcrypto twrpdtgen requests
 
-      - name: Start Telegram Bot
+      - name: Start Telegram Userbot
         env:
-          # Mengambil rahasia dari brankas GitHub dan mengirimnya ke Python
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          echo "Bot mulai berjalan..."
           python generator_twrp_devicetree.py
