@@ -17,11 +17,14 @@ GITHUB_USERNAME = os.environ.get("GH_USERNAME")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN")
 
 # ==============================================================================
-# PENGATURAN BATASAN GRUP (IZINKAN HIDUP DI GRUP TERTENTU SAJA)
+# PENGATURAN BATASAN GRUP & SESI USER ID DI BALIK LAYAR
 # ==============================================================================
 ALLOWED_GROUP_IDS = [
     -1003503670594 # <-- ID Grup utama Anda
 ]
+
+# Set untuk menyimpan User ID yang sedang memegang izin/sesi aktif
+ACTIVE_USERS = set()
 
 # ==============================================================================
 # INISIALISASI USERBOT
@@ -34,56 +37,63 @@ app = Client(
 )
 
 # ==============================================================================
-# HANDLER: PERINTAH /START
+# HANDLER: PERINTAH /dt_twrp (MENANDAI ID USER)
 # ==============================================================================
 @app.on_message(filters.command("dt_twrp", prefixes=["/", ".", "#"]))
 async def start(client, message):
     chat_id = message.chat.id
+    user_id = message.from_user.id
+    
     if message.chat.type in ["supergroup", "group"] and ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
         return
+
+    # Menandai ID user di balik layar bahwa dia diizinkan mengirim 1 file .img
+    ACTIVE_USERS.add(user_id)
 
     teks = (
         "🤖 **Generator Device Tree TWRP (Pro Mode)**\n\n"
         "Sistem ini mengekstrak *Device Tree* TWRP dengan format penamaan kustom secara otomatis!\n\n"
-        "**Cara Penggunaan:**\n"
-        "Kirimkan file partisi yang berisi ramdisk berformat `.img` **wajib** dengan menyertakan teks **`/dt_twrp`** pada caption."
+        f"🟢 **Halo `{message.from_user.first_name}`! Akses Anda diaktifkan.**\n"
+        "Silakan kirimkan file partisi `.img` Anda sekarang (tanpa caption).\n"
+        "*(Sistem hanya akan memproses file dari Anda dan mengabaikan kiriman member lain).* "
     )
     await message.reply_text(teks)
 
 # ==============================================================================
-# HANDLER: DETEKSI FILE .IMG OTOMATIS
+# HANDLER: DETEKSI FILE .IMG BERDASARKAN ID USER
 # ==============================================================================
-# PERBAIKAN: Menghapus filters.supergroup karena filters.group sudah mencakup semuanya
 @app.on_message(filters.document & (filters.private | filters.group))
 async def handle_document(client, message):
     chat_id = message.chat.id
     chat_type = message.chat.type
+    user_id = message.from_user.id
 
-    # 1. Pengecekan Grup Whitelist
     if chat_type in ["supergroup", "group"]:
         if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
             return
 
-    # 2. WAJIB ADA CAPTION '/dt_twrp' (Berlaku di Private Chat maupun Grup)
-    caption = message.caption or ""
-    if "/dt_twrp" not in caption.lower():
-        return
+    # 1. CEK APAKAH USER INI MEMILIKI IZIN AKTIF (ID TERDAFTAR DI BALIK LAYAR)
+    if user_id not in ACTIVE_USERS:
+        return # Abaikan total jika user belum mengetik /dt_twrp sebelumnya
 
-    # 3. Validasi Ekstensi .img
+    # 2. VALIDASI EKSTENSI .IMG
     file_name = message.document.file_name or ""
     if not file_name.lower().endswith('.img'):
         return
 
-    msg = await message.reply_text("⏳ **File `.img` terdeteksi!**\nMemulai unduhan...")
+    # 3. CABUT IZIN (Hapus ID dari Set agar gerbang langsung tertutup kembali untuk mencegah spam/looping)
+    ACTIVE_USERS.remove(user_id)
 
-    # 4. Membuat Folder Workspace Unik (Mencegah Bentrok File Temp)
+    msg = await message.reply_text("⏳ **File `.img` terdeteksi dari pemilik sesi!**\nMemulai unduhan...")
+
+    # 4. Membuat Folder Workspace Unik per Eksekusi
     rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     work_dir = f"workspace_{rand_id}"
     
     try:
         os.makedirs(work_dir, exist_ok=True)
         
-        # 5. Unduh file ke Workspace Unik
+        # 5. Unduh file
         file_path = await client.download_media(message, file_name=f"{work_dir}/source.img")
 
         await msg.edit_text("⚙️ **Mengekstrak Device Tree...**")
@@ -111,7 +121,7 @@ async def handle_document(client, message):
 
         device_tree_path = os.path.join(output_dir, manufacturer, codename)
 
-        # 8. Inspeksi Data Variabel .mk
+        # 8. Inspeksi Variabel .mk
         product_model = "unknown_model"
         build_desc = "unknown_desc"
         build_fingerprint = "unknown_fingerprint"
@@ -128,11 +138,10 @@ async def handle_document(client, message):
                     elif "BUILD_FINGERPRINT" in line and "=" in line:
                         build_fingerprint = line.split('=', 1)[1].replace('"', '').replace("'", "").strip().replace('/', '_').replace(' ', '_')
 
-        # 9. Format Penamaan Baru (Mengganti nama file dengan os.replace)
+        # 9. Format Penamaan Baru & Replace File jika sudah ada
         custom_img_name = f'twrp-{product_model}-{build_desc}-{build_fingerprint}.img'.replace(':', '_')
         final_workspace_img_path = os.path.join(work_dir, custom_img_name)
         
-        # os.replace memastikan file akan langsung ditimpa jika sudah ada file dengan nama yang sama
         os.replace(file_path, final_workspace_img_path)
 
         repo_name = f"android_device_{manufacturer}_{codename}"
@@ -161,7 +170,7 @@ async def handle_document(client, message):
         os.chdir(device_tree_path)
         subprocess.run(["git", "init"])
         subprocess.run(["git", "add", "."])
-        subprocess.run(["git", "commit", "-m", f"Add device tree for {codename} ({product_model})"])
+        subprocess.run(["git", "commit", f"-m", f"Add device tree for {codename} ({product_model})"])
         subprocess.run(["git", "branch", "-M", "main"])
         
         remote_url = f"https://{GITHUB_USERNAME}:{GITHUB_TOKEN}@github.com/{GITHUB_USERNAME}/{repo_name}.git"
@@ -170,7 +179,7 @@ async def handle_document(client, message):
         
         os.chdir("../../..")
 
-        # 12. Kirim Pesan Berhasil
+        # 12. Kirim Hasil Akhir
         github_link = f"https://github.com/{GITHUB_USERNAME}/{repo_name}/tree/main"
         
         final_text = (
@@ -188,7 +197,6 @@ async def handle_document(client, message):
         await msg.edit_text(f"❌ **Terjadi kesalahan:**\n`{str(e)}`")
     
     finally:
-        # 13. Pembersihan Direktori Kerja secara aman
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -196,5 +204,5 @@ async def handle_document(client, message):
 # EKSEKUSI UTAMA
 # ==============================================================================
 if __name__ == "__main__":
-    print("Userbot TWRP Generator Stable Mode Menyala!")
+    print("Userbot TWRP Generator ID Session Mode Menyala!")
     app.run()
