@@ -38,7 +38,7 @@ userbot_worker = Client("userbot_worker", api_id=API_ID, api_hash=API_HASH, sess
 # ==============================================================================
 # HANDLER: BOT UI (Menampilkan Tombol)
 # ==============================================================================
-@bot_ui.on_message(filters.command(["dt", "start"]) & filters.group)
+@bot_ui.on_message(filters.command(["dt"]) & filters.group)
 async def start_menu(client, message):
     if ALLOWED_GROUP_IDS and message.chat.id not in ALLOWED_GROUP_IDS:
         return
