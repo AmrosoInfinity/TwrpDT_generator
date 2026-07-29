@@ -15,6 +15,16 @@ GITHUB_USERNAME = os.environ.get("GH_USERNAME")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN")
 
 # ==============================================================================
+# PENGATURAN BATASAN GRUP (IZINKAN HIDUP DI GRUP TERTENTU SAJA)
+# ==============================================================================
+# Masukkan ID grup yang diizinkan di sini (bisa berupa integer negatif untuk supergrup).
+# Contoh: ALLOWED_GROUP_IDS = [-1001234567890, -1009876543210]
+# Jika dikosongkan ([ ]), maka bot tidak akan merespons di grup manapun (hanya chat pribadi).
+ALLOWED_GROUP_IDS = [
+    -1003503670594, # <-- Ganti dengan ID Grup utama Anda
+]
+
+# ==============================================================================
 # INISIALISASI USERBOT
 # ==============================================================================
 app = Client(
@@ -27,27 +37,40 @@ app = Client(
 # ==============================================================================
 # HANDLER: PERINTAH /START
 # ==============================================================================
-@app.on_message(filters.command("start", prefixes=["/", "."]) & filters.private)
+@app.on_message(filters.command("dt_twrp", prefixes=["/", ".", "#"]))
 async def start(client, message):
+    # Jika di grup, pastikan grup tersebut terdaftar sebelum merespons perintah start
+    if message.chat.type in ["supergroup", "group"] and message.chat.id not in ALLOWED_GROUP_IDS:
+        return
+
     teks = (
         "🤖 **Generator Device Tree TWRP (Pro Mode)**\n\n"
-        "Sistem ini mendeteksi dan mengekstrak *Device Tree* TWRP dengan kecepatan turbo. "
-        "Karena menggunakan sistem Userbot, batas ukuran file Telegram API telah ditembus, mendukung file raksasa hingga 2 GB!\n\n"
+        "Sistem ini mendeteksi dan mengekstrak *Device Tree* TWRP dengan kecepatan turbo, mendukung file hingga 2 GB!\n\n"
         "**Cara Penggunaan:**\n"
-        "Sangat simpel! Langsung saja kirimkan file partisi berekstensi `.img` (misalnya `boot.img`, `recovery.img`) ke obrolan ini, "
-        "dan sistem akan otomatis bekerja."
+        "Kirimkan file partisi berekstensi `.img` (misalnya `boot.img`) dengan menyertakan teks **`/dt`** pada *caption*."
     )
     await message.reply_text(teks)
 
 # ==============================================================================
-# HANDLER: DETEKSI FILE .IMG OTOMATIS
+# HANDLER: DETEKSI FILE .IMG OTOMATIS (Dibatasi Grup Tertentu)
 # ==============================================================================
-@app.on_message(filters.document & filters.private)
+@app.on_message(filters.document & (filters.private | filters.group))
 async def handle_document(client, message):
-    # Pengamanan jika file dokumen tidak memiliki nama
+    chat_id = message.chat.id
+    chat_type = message.chat.type
+
+    # ATURAN KETAT:
+    # 1. Jika di dalam Grup/Supergrup, cek apakah ID grup ada di dalam ALLOWED_GROUP_IDS.
+    if chat_type in ["supergroup", "group"]:
+        if chat_id not in ALLOWED_GROUP_IDS:
+            return # Abaikan total jika dari grup yang tidak terdaftar
+        
+        # Di grup yang diizinkan, user wajib menyertakan caption '/dt'
+        caption = message.caption or ""
+        if "/dt" not in caption.lower():
+            return
+
     file_name = message.document.file_name or ""
-    
-    # SILENT IGNORE: Jika bukan file .img, bot akan diam (agar chat normal tidak terganggu)
     if not file_name.lower().endswith('.img'):
         return
 
@@ -55,7 +78,6 @@ async def handle_document(client, message):
 
     work_dir = "workspace"
     try:
-        # Menyiapkan folder kerja yang bersih
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir)
         os.makedirs(work_dir, exist_ok=True)
@@ -103,7 +125,7 @@ async def handle_document(client, message):
         }
         
         req = requests.post("https://api.github.com/user/repos", json=repo_data, headers=headers)
-        if req.status_code not in [201, 422]:  # 201 Created, 422 Unprocessable Entity (Repo sudah ada)
+        if req.status_code not in [201, 422]:
             raise Exception(f"Gagal membuat repositori GitHub:\n{req.text}")
 
         # 5. PUSH SOURCE CODE KE GITHUB (GIT)
@@ -118,9 +140,8 @@ async def handle_document(client, message):
         
         remote_url = f"https://{GITHUB_USERNAME}:{GITHUB_TOKEN}@github.com/{GITHUB_USERNAME}/{repo_name}.git"
         subprocess.run(["git", "remote", "add", "origin", remote_url])
-        subprocess.run(["git", "push", "-u", "origin", "main", "--force"])
+        subprocess.run(["git", "push", -u, "origin", "main", "--force"])
         
-        # Kembali ke direktori awal server
         os.chdir("../../..")
 
         # 6. INSPEKSI VARIABEL BUILD DESCRIPTION
@@ -129,10 +150,10 @@ async def handle_document(client, message):
         for mk in mk_files:
             with open(mk, 'r') as f:
                 content = f.read()
-                if "PRIVATE_BUILD_DESC=" in content:
+                if "PRIVATE_BUILD_DESC" in content:
                     for line in content.split('\n'):
-                        if "PRIVATE_BUILD_DESC=" in line:
-                            build_desc = line.split('=')[1].replace('"', '').strip()
+                        if "PRIVATE_BUILD_DESC" in line and "=" in line:
+                            build_desc = line.split('=', 1)[1].replace('"', '').replace("'", "").strip()
                             break
 
         # 7. FORMAT PESAN HASIL AKHIR
@@ -146,14 +167,12 @@ async def handle_document(client, message):
             f"🔗 **Device tree:** {github_link}"
         )
         
-        # Kirim respons final tanpa pratinjau halaman agar UI tetap bersih
         await msg.edit_text(final_text, disable_web_page_preview=True)
 
     except Exception as e:
         await msg.edit_text(f"❌ **Terjadi kesalahan:**\n`{str(e)}`")
     
     finally:
-        # PEMBERSIHAN WORKSPACE (Mencegah storage GitHub Actions kepenuhan)
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir)
 
@@ -161,7 +180,5 @@ async def handle_document(client, message):
 # EKSEKUSI UTAMA
 # ==============================================================================
 if __name__ == "__main__":
-    print("==================================================")
-    print("Userbot TWRP Generator Menyala dan Standby 24/7!")
-    print("==================================================")
+    print("Userbot TWRP Generator Whitelist Group Mode Menyala!")
     app.run()
