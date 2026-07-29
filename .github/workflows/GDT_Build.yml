@@ -43,4 +43,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           echo "Bot mulai berjalan..."
-          python bot_twrp.py
+          python generator_twrp_devicetree.py
