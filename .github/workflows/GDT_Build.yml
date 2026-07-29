@@ -29,8 +29,9 @@ jobs:
           sudo apt-get install -y cpio lz4 git
 
       - name: Install Python Requirements
-        # tgcrypto ditambahkan agar download file besar sangat cepat!
-        run: pip install pyrogram tgcrypto twrpdtgen requests
+        # tgcrypto: mempercepat unduhan file besar
+        # aospdtgen & twrpdtgen: Dual-engine untuk ekstraksi DT otomatis
+        run: pip install pyrogram tgcrypto twrpdtgen aospdtgen requests
 
       - name: Start Telegram Userbot
         env:
