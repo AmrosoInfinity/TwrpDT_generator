@@ -8,9 +8,8 @@ from pyrogram.errors import SessionPasswordNeeded
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Penyimpanan sementara untuk data input user & koneksi client
+# Penyimpanan sementara untuk data input user
 user_data = {}
-active_clients = {}
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -55,11 +54,10 @@ def process_phone(message):
 async def send_login_code(chat_id):
     data = user_data[chat_id]
     
-    # Menggunakan in_memory=True agar lebih bersih dan menyimpan Client agar tidak terputus
-    client = Client(f"session_{chat_id}", api_id=data['api_id'], api_hash=data['api_hash'], in_memory=True)
-    active_clients[chat_id] = client
+    # HAPUS in_memory=True agar dibuatkan file session fisik sementara
+    client = Client(f"session_{chat_id}", api_id=data['api_id'], api_hash=data['api_hash'])
     
-    await client.connect() # Pertahankan koneksi ini!
+    await client.connect()
     try:
         code_info = await client.send_code(data['phone'])
         data['phone_code_hash'] = code_info.phone_code_hash
@@ -67,9 +65,8 @@ async def send_login_code(chat_id):
         bot.register_next_step_handler(msg, process_code)
     except Exception as e:
         bot.send_message(chat_id, f"❌ **Gagal mengirim kode:**\n`{e}`\n\nTekan /start untuk mengulang.", parse_mode="Markdown")
-        await client.disconnect()
-        if chat_id in active_clients:
-            del active_clients[chat_id]
+    finally:
+        await client.disconnect() # Putuskan koneksi dengan aman
 
 def process_code(message):
     code = message.text.replace(" ", "").replace("-", "").strip()
@@ -79,25 +76,25 @@ def process_code(message):
 
 async def verify_login_code(chat_id):
     data = user_data[chat_id]
-    client = active_clients.get(chat_id)
     
-    if not client:
-        bot.send_message(chat_id, "❌ Koneksi terputus. Silakan tekan /start untuk mengulang.")
-        return
-
+    # Buka kembali file session yang tadi tersimpan
+    client = Client(f"session_{chat_id}", api_id=data['api_id'], api_hash=data['api_hash'])
+    await client.connect()
+    
     try:
         await client.sign_in(data['phone'], data['phone_code_hash'], data['code'])
         session_string = await client.export_session_string()
         send_success(chat_id, session_string)
         await client.disconnect()
-        del active_clients[chat_id]
+        clean_up(chat_id)
     except SessionPasswordNeeded:
         msg = bot.send_message(chat_id, "🔐 Akun Anda dilindungi **Verifikasi 2 Langkah**.\n\n5️⃣ **Masukkan password Telegram Anda:**", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_password)
+        await client.disconnect()
     except Exception as e:
         bot.send_message(chat_id, f"❌ **Kode salah atau kadaluarsa:**\n`{e}`\n\nSilakan tekan /start untuk mengulang.", parse_mode="Markdown")
         await client.disconnect()
-        del active_clients[chat_id]
+        clean_up(chat_id)
 
 def process_password(message):
     user_data[message.chat.id]['password'] = message.text.strip()
@@ -106,7 +103,9 @@ def process_password(message):
 
 async def verify_password(chat_id):
     data = user_data[chat_id]
-    client = active_clients.get(chat_id)
+    
+    client = Client(f"session_{chat_id}", api_id=data['api_id'], api_hash=data['api_hash'])
+    await client.connect()
     
     try:
         await client.check_password(data['password'])
@@ -115,10 +114,8 @@ async def verify_password(chat_id):
     except Exception as e:
         bot.send_message(chat_id, f"❌ **Password salah:**\n`{e}`\n\nSilakan tekan /start untuk mengulang.", parse_mode="Markdown")
     finally:
-        if client:
-            await client.disconnect()
-            if chat_id in active_clients:
-                del active_clients[chat_id]
+        await client.disconnect()
+        clean_up(chat_id)
 
 def send_success(chat_id, session_string):
     teks = (
@@ -129,5 +126,14 @@ def send_success(chat_id, session_string):
         "Ini adalah kunci utama akun Telegram Anda. JANGAN DIBAGIKAN kepada siapa pun. Segera masukkan ke dalam rahasia (Secrets) GitHub Anda."
     )
     bot.send_message(chat_id, teks, parse_mode="Markdown")
+
+def clean_up(chat_id):
+    # Membersihkan file session fisik agar server tetap aman dan rapi
+    session_file = f"session_{chat_id}.session"
+    journal_file = f"session_{chat_id}.session-journal"
+    if os.path.exists(session_file):
+        os.remove(session_file)
+    if os.path.exists(journal_file):
+        os.remove(journal_file)
 
 bot.polling(none_stop=True)
