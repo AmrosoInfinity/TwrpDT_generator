@@ -18,7 +18,7 @@ GITHUB_TOKEN = os.environ.get("GH_TOKEN")
 # PENGATURAN BATASAN GRUP (IZINKAN HIDUP DI GRUP TERTENTU SAJA)
 # ==============================================================================
 ALLOWED_GROUP_IDS = [
-    -1003503670594, # <-- Ganti dengan ID Grup utama Anda (kosongkan jika hanya private)
+    -1003503670594 # <-- Ganti dengan ID Grup utama Anda (kosongkan jika hanya private)
 ]
 
 # ==============================================================================
