@@ -34,7 +34,7 @@ app = Client(
 # ==============================================================================
 # HANDLER: PERINTAH /START
 # ==============================================================================
-@app.on_message(filters.command("start", prefixes=["/", "."]))
+@app.on_message(filters.command("dt_twrp", prefixes=["/", ".", "#"]))
 async def start(client, message):
     chat_id = message.chat.id
     if message.chat.type in ["supergroup", "group"] and ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
@@ -44,7 +44,7 @@ async def start(client, message):
         "🤖 **Generator Device Tree TWRP (Pro Mode)**\n\n"
         "Sistem ini mengekstrak *Device Tree* TWRP dengan format penamaan kustom secara otomatis!\n\n"
         "**Cara Penggunaan:**\n"
-        "Kirimkan file partisi yang berisi ramdisk berformat `.img` dengan menyertakan teks **`/dt`** (di grup)."
+        "Kirimkan file partisi yang berisi ramdisk berformat `.img` dengan menyertakan teks **`/dt_twrp`** (di grup)."
     )
     await message.reply_text(teks)
 
@@ -60,7 +60,7 @@ async def handle_document(client, message):
         if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
             return
         caption = message.caption or ""
-        if "/dt" not in caption.lower():
+        if "/dt_twrp" not in caption.lower():
             return
 
     file_name = message.document.file_name or ""
