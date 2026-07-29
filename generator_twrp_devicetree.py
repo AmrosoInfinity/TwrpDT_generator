@@ -18,7 +18,7 @@ SESSION_STRING = os.environ.get("SESSION_STRING", "") # Untuk bypass limit 20MB
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
-ALLOWED_GROUP_IDS = [-1003503670594] # ID Grup tempat Bot & Userbot berkumpul
+ALLOWED_GROUP_IDS = [-1003503670594,-1003760536755] # ID Grup tempat Bot & Userbot berkumpul
 
 # ==============================================================================
 # STATE MACHINE (Memori Bersama antara Bot dan Userbot)
