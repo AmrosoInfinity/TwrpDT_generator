@@ -5,7 +5,7 @@ import requests
 import random
 import string
 import asyncio
-from pyrogram import Client, filters, compose
+from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==============================================================================
@@ -18,26 +18,40 @@ SESSION_STRING = os.environ.get("SESSION_STRING", "")
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
-ALLOWED_GROUP_IDS = [-1003760536755] # ID Grup tempat Bot & Userbot berkumpul
+# HANYA SATU GRUP INI YANG DIIZINKAN (Grup Tester Anda)
+ALLOWED_GROUP_IDS = [-1003760536755]
 
-# ==============================================================================
-# STATE MACHINE (Memori Bersama antara Bot dan Userbot)
-# ==============================================================================
 USER_STATE = {}
 PORT_MEMORY = {}
 
 # ==============================================================================
-# INISIALISASI DUAL-CLIENT
+# INISIALISASI KLIEN
 # ==============================================================================
-bot_ui = Client("bot_ui", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
-userbot_worker = Client("userbot_worker", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+bot_ui = Client(
+    "bot_ui_session",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    in_memory=True
+)
+
+userbot_worker = Client(
+    "userbot_session",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING,
+    in_memory=True
+)
 
 # ==============================================================================
-# HANDLER: BOT UI (Menampilkan Tombol)
+# HANDLER: BOT UI (Tombol Interaktif)
 # ==============================================================================
-@bot_ui.on_message(filters.command(["dt", "start"], prefixes=["/", ".", "#"]) & filters.group)
+@bot_ui.on_message(filters.command(["dt", "start"], prefixes=["/", ".", "!"]))
 async def start_menu(client, message):
-    if ALLOWED_GROUP_IDS and message.chat.id not in ALLOWED_GROUP_IDS:
+    chat_id = message.chat.id
+    
+    # Validasi ketat: Abaikan jika dari grup lain
+    if message.chat.type in ["supergroup", "group"] and chat_id not in ALLOWED_GROUP_IDS:
         return
 
     keyboard = InlineKeyboardMarkup([
@@ -61,13 +75,13 @@ async def button_handler(client, callback_query):
         USER_STATE[user_id] = "twrp"
         await callback_query.message.edit_text(
             "🛠️ **Mode: TWRP Device Tree**\n\n"
-            "🟢 *Akses Userbot dibuka. Silakan kirim `boot.img` atau `recovery.img` Anda sekarang.*"
+            "🟢 *Akses dibuka. Silakan kirim file `boot.img` atau `recovery.img` Anda sekarang.*"
         )
     elif data == "menu_aosp":
         USER_STATE[user_id] = "aosp"
         await callback_query.message.edit_text(
             "🚀 **Mode: AOSP Device Tree**\n\n"
-            "🟢 *Akses Userbot dibuka. Silakan kirim `vendor_boot.img` atau `init_boot.img` Anda sekarang.*"
+            "🟢 *Akses dibuka. Silakan kirim file `vendor_boot.img` atau `init_boot.img` Anda sekarang.*"
         )
     elif data == "menu_port":
         USER_STATE[user_id] = "port_step1"
@@ -77,18 +91,18 @@ async def button_handler(client, callback_query):
         )
 
 # ==============================================================================
-# HANDLER: USERBOT WORKER (Menyambar File & Mengeksekusi)
+# HANDLER: USERBOT WORKER (Menyambar File Dokumen)
 # ==============================================================================
-@userbot_worker.on_message(filters.document & filters.group)
+@userbot_worker.on_message(filters.document)
 async def handle_document(client, message):
-    user_id = message.from_user.id
     chat_id = message.chat.id
     
-    if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
+    # Mutlak abaikan pesan dokumen dari luar grup yang diizinkan untuk mencegah error peer
+    if chat_id not in ALLOWED_GROUP_IDS:
         return
 
-    # Cek memori bersama, apakah user ini sudah menekan tombol di Bot UI?
-    if user_id not in USER_STATE:
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id or user_id not in USER_STATE:
         return 
 
     state = USER_STATE[user_id]
@@ -99,9 +113,7 @@ async def handle_document(client, message):
 
     msg = await message.reply_text("⏳ **Userbot menyambar file Anda...**")
 
-    # ---------------------------------------------------------
     # MODE GENERATOR (TWRP / AOSP)
-    # ---------------------------------------------------------
     if state in ["twrp", "aosp"]:
         USER_STATE.pop(user_id, None) 
         engine = "twrpdtgen" if state == "twrp" else "aospdtgen"
@@ -121,12 +133,10 @@ async def handle_document(client, message):
             shutil.rmtree(work_dir, ignore_errors=True)
             return
             
-        await msg.edit_text("✅ **Userbot Berhasil!**\nSilakan integrasikan logika GitHub Anda di sini.")
+        await msg.edit_text("✅ **Userbot Berhasil mengekstrak Device Tree!**")
         shutil.rmtree(work_dir, ignore_errors=True)
 
-    # ---------------------------------------------------------
-    # MODE PORTING
-    # ---------------------------------------------------------
+    # MODE PORTING (LANGKAH 1)
     elif state == "port_step1":
         rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         work_dir = f"port_workspace_{rand_id}"
@@ -136,8 +146,9 @@ async def handle_document(client, message):
         PORT_MEMORY[user_id] = stock_path
         USER_STATE[user_id] = "port_step2"
         
-        await msg.edit_text("✅ **Userbot menerima Stock Recovery!**\n\n🟢 **Langkah 2:** *Silakan kirim PORT RECOVERY.*")
+        await msg.edit_text("✅ **Stock Recovery Diterima!**\n\n🟢 **Langkah 2:** *Sekarang kirim file PORT RECOVERY.*")
 
+    # MODE PORTING (LANGKAH 2)
     elif state == "port_step2":
         stock_path = PORT_MEMORY.pop(user_id, None)
         USER_STATE.pop(user_id, None)
@@ -145,28 +156,36 @@ async def handle_document(client, message):
         work_dir = os.path.dirname(stock_path)
         port_path = await client.download_media(message, file_name=f"{work_dir}/port_recovery.img")
         
-        await msg.edit_text("⚙️ **Userbot menjalankan Auto Porter...**")
+        await msg.edit_text("⚙️ **Menjalankan Auto Porter...**")
 
         port_result = subprocess.run(["bash", "porter.sh", stock_path, port_path, work_dir], capture_output=True, text=True)
 
         if port_result.returncode == 0:
             output_img = f"{work_dir}/twrp_ported.img"
             if os.path.exists(output_img):
-                await msg.edit_text("✅ **Porting Berhasil! Userbot mengunggah hasil...**")
+                await msg.edit_text("✅ **Porting Berhasil! Mengirim file hasil...**")
                 await client.send_document(chat_id=message.chat.id, document=output_img)
             else:
-                await msg.edit_text("❌ Proses selesai tapi file output tidak ditemukan.")
+                await msg.edit_text("❌ Proses selesai tapi file output `twrp_ported.img` tidak ditemukan.")
         else:
             await msg.edit_text(f"❌ **Porting Gagal!**\n`{port_result.stderr[:500]}`")
             
         shutil.rmtree(work_dir, ignore_errors=True)
 
 # ==============================================================================
-# EKSEKUSI BERSAMAAN (DUAL RUNNER)
+# MAIN RUNNER
 # ==============================================================================
 async def main():
-    print("Dual-Client (Bot UI & Userbot Worker) Menyala Bersamaan!")
-    await compose([bot_ui, userbot_worker])
+    print("Menghidupkan Bot UI & Userbot Worker...")
+    await bot_ui.start()
+    await userbot_worker.start()
+    print("Kedua Client Berhasil Online dan Standby!")
+    
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Bot dihentikan.")
