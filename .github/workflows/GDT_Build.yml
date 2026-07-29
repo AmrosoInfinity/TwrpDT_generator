@@ -33,11 +33,12 @@ jobs:
         # aospdtgen & twrpdtgen: Dual-engine untuk ekstraksi DT otomatis
         run: pip install pyrogram tgcrypto twrpdtgen aospdtgen requests
 
-      - name: Start Telegram Userbot
+      - name: Start Telegram Dual-Client Bot
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }} # <--- Menambahkan Token Bot Resmi di sini
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
