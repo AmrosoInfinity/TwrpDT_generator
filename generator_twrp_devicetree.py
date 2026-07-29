@@ -13,8 +13,8 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ==============================================================================
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")       # Untuk UI Tombol
-SESSION_STRING = os.environ.get("SESSION_STRING", "") # Untuk bypass limit 20MB
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")       
+SESSION_STRING = os.environ.get("SESSION_STRING", "") 
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
@@ -29,16 +29,13 @@ PORT_MEMORY = {}
 # ==============================================================================
 # INISIALISASI DUAL-CLIENT
 # ==============================================================================
-# 1. Klien Bot (Tukang Pamer UI)
-bot_ui = Client("bot_ui", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# 2. Klien Userbot (Tukang Kerja Kasar)
-userbot_worker = Client("userbot_worker", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+bot_ui = Client("bot_ui", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+userbot_worker = Client("userbot_worker", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
 
 # ==============================================================================
 # HANDLER: BOT UI (Menampilkan Tombol)
 # ==============================================================================
-@bot_ui.on_message(filters.command(["dt"]) & filters.group)
+@bot_ui.on_message(filters.command(["dt", "start"], prefixes=["/", ".", "#"]) & filters.group)
 async def start_menu(client, message):
     if ALLOWED_GROUP_IDS and message.chat.id not in ALLOWED_GROUP_IDS:
         return
@@ -106,7 +103,7 @@ async def handle_document(client, message):
     # MODE GENERATOR (TWRP / AOSP)
     # ---------------------------------------------------------
     if state in ["twrp", "aosp"]:
-        USER_STATE.pop(user_id) # Kunci gerbang
+        USER_STATE.pop(user_id, None) 
         engine = "twrpdtgen" if state == "twrp" else "aospdtgen"
         
         rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
@@ -142,15 +139,14 @@ async def handle_document(client, message):
         await msg.edit_text("✅ **Userbot menerima Stock Recovery!**\n\n🟢 **Langkah 2:** *Silakan kirim PORT RECOVERY.*")
 
     elif state == "port_step2":
-        stock_path = PORT_MEMORY.pop(user_id)
-        USER_STATE.pop(user_id)
+        stock_path = PORT_MEMORY.pop(user_id, None)
+        USER_STATE.pop(user_id, None)
         
         work_dir = os.path.dirname(stock_path)
         port_path = await client.download_media(message, file_name=f"{work_dir}/port_recovery.img")
         
         await msg.edit_text("⚙️ **Userbot menjalankan Auto Porter...**")
 
-        # Panggil script porting Anda
         port_result = subprocess.run(["bash", "porter.sh", stock_path, port_path, work_dir], capture_output=True, text=True)
 
         if port_result.returncode == 0:
