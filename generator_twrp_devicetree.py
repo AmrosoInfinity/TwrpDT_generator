@@ -51,11 +51,11 @@ async def start(client, message):
     ACTIVE_USERS.add(user_id)
 
     teks = (
-        "🤖 **Generator Device Tree TWRP (Pro Mode)**\n\n"
+        "🤖 **Generator Device Tree TWRP (Access Mode)**\n\n"
         "Sistem ini mengekstrak *Device Tree* TWRP dengan format penamaan kustom secara otomatis!\n\n"
         f"🟢 **Halo `{message.from_user.first_name}`! Akses Anda diaktifkan.**\n"
         "Silakan kirimkan file partisi `.img` Anda sekarang (tanpa caption).\n"
-        "*(Sistem hanya akan memproses file dari Anda dan mengabaikan kiriman member lain).* "
+        "*(Sistem hanya akan memproses file dari Anda dan silahkan duduk ngopi dengan santay).* "
     )
     await message.reply_text(teks)
 
