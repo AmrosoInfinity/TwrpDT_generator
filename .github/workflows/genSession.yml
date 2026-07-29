@@ -1,0 +1,36 @@
+name: Bot Generator Session String
+
+on:
+  schedule:
+    # Supaya bot ini standby melayani pembuatan sesi (reset tiap 5 jam)
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: session-generator-bot
+  cancel-in-progress: true 
+
+jobs:
+  run-session-bot:
+    name: Running Session Maker
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Requirements
+        run: pip install pyTelegramBotAPI pyrogram tgcrypto
+
+      - name: Start Session Generator Bot
+        env:
+          # Kita hanya butuh rahasia BOT_TOKEN lama Anda dari BotFather
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          echo "Bot Pembuat Sesi mulai berjalan..."
+          python session.py
