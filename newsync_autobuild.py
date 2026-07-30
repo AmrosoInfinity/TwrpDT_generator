@@ -10,18 +10,23 @@ from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==============================================================================
-# KONFIGURASI ENVIRONMENT VARIABLES
+# KONFIGURASI ENVIRONMENT VARIABLES & PRINT DEBUG MENTAH
 # ==============================================================================
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
-BP_TOKEN = os.environ.get("BP_TOKEN", "")       # Token BotFather untuk UI Tombol
-SESSION_STRING = os.environ.get("SESSION_STRING", "") # Sesi Userbot untuk Kerja Berat
+BP_TOKEN = os.environ.get("BP_TOKEN", "")       
+SESSION_STRING = os.environ.get("SESSION_STRING", "") 
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
+# Print full debug mentah untuk memastikan secret terbaca di GitHub Actions
+print(f"DEBUG MENTAH BP_TOKEN (Full): '{BP_TOKEN}'", flush=True)
+print(f"DEBUG MENTAH API_ID: '{API_ID}'", flush=True)
+print(f"DEBUG MENTAH SESSION_STRING (15 char awal): '{SESSION_STRING[:15]}...'", flush=True)
+
 ALLOWED_GROUP_IDS = [
-    -1003503670594, 
-    -1003760536755# <-- ID Grup utama Anda
+    -1003503670594,
+    -1003760536755
 ]
 
 USER_STATE = {}
@@ -97,7 +102,6 @@ async def handle_document(client, message):
     if not user_id or user_id not in USER_STATE:
         return 
 
-    # Validasi ID Grup langsung dari objek message tanpa query cache tambahan yang error
     chat_id = message.chat.id
     if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS and message.chat.type != "private":
         return
@@ -315,6 +319,14 @@ async def main():
     )
     
     print("Dual-Client Berhasil Online dan Standby!", flush=True)
+
+    # Sinkronisasi cache peer grup agar aman dari error "Peer id invalid"
+    for gid in ALLOWED_GROUP_IDS:
+        try:
+            await userbot_worker.get_chat(gid)
+        except Exception:
+            pass
+
     await idle()
     
     print("Mematikan klien...", flush=True)
