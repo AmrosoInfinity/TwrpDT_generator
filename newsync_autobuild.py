@@ -320,28 +320,29 @@ async def handle_document(client, message):
 async def main():
     print("Menghidupkan Dual-Client (Bot UI & Userbot Worker)...", flush=True)
     
-    # Jalankan start() secara sekuensial agar session file terbuat dengan rapi
     await bot_ui.start()
-    await userbot_worker.start()
-    
-    print("Dual-Client Berhasil Online dan Standby!", flush=True)
+    bot_info = await bot_ui.get_me()
+    print("\n==================================================", flush=True)
+    print(f"🤖 BOT UI BENERAN LOGIN SEBAGAI: @{bot_info.username}", flush=True)
+    print("==================================================\n", flush=True)
 
+    await userbot_worker.start()
+    user_info = await userbot_worker.get_me()
+    print(f"👤 USERBOT LOGIN SEBAGAI: {user_info.first_name}", flush=True)
+    
     print("Memulai sinkronisasi Peer Database Userbot...", flush=True)
     try:
-        # Memaksa Pyrogram menyimpan cache dari riwayat chat agar 'buku telepon' terisi
-        async for dialog in userbot_worker.get_dialogs(limit=100):
+        async for dialog in userbot_worker.get_dialogs(limit=20):
             pass
         print("Sinkronisasi riwayat dialog selesai.", flush=True)
-    except Exception as e:
-        print(f"Gagal sinkronisasi dialog: {e}", flush=True)
+    except Exception:
+        pass
 
-    # Sinkronisasi manual khusus untuk grup yang diizinkan
     for gid in ALLOWED_GROUP_IDS:
         try:
             await userbot_worker.get_chat(gid)
-            print(f"Sinkronisasi grup {gid} sukses.", flush=True)
-        except Exception as e:
-            print(f"Gagal sinkronisasi grup {gid}: {e}", flush=True)
+        except Exception:
+            pass
 
     print("\n✅ SISTEM SIAP! MENUNGGU PERINTAH DARI TELEGRAM...", flush=True)
     await idle()
