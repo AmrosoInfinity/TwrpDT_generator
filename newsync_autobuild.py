@@ -53,6 +53,24 @@ userbot_worker = Client(
 )
 
 # ==============================================================================
+# CCTV SPY LOGGER (Bypass semua filter)
+# ==============================================================================
+# Hapus cache session kalau ada yang nyangkut di GitHub
+if os.path.exists("bot_ui_session.session"):
+    os.remove("bot_ui_session.session")
+if os.path.exists("userbot_session.session"):
+    os.remove("userbot_session.session")
+
+@bot_ui.on_message(filters.all, group=-1)
+async def cctv_bot(client, message):
+    print("\n==================================================", flush=True)
+    print(f"🚨 CCTV BOT NANGKAP PESAN!", flush=True)
+    print(f"Teks: {message.text or 'Bukan teks (Media/System)'}", flush=True)
+    print(f"Chat ID: {message.chat.id} | Tipe: {message.chat.type}", flush=True)
+    print("==================================================\n", flush=True)
+
+
+# ==============================================================================
 # HANDLER: BOT UI (Menampilkan Tombol Pilihan Menu & Porting)
 # ==============================================================================
 @bot_ui.on_message(filters.command(["dt", "dt_twrp", "start"], prefixes=["/", ".", "#"]))
