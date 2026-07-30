@@ -20,7 +20,8 @@ GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
 ALLOWED_GROUP_IDS = [
-    -1003503670594 # <-- ID Grup utama Anda
+    -1003503670594, 
+    -1003760536755# <-- ID Grup utama Anda
 ]
 
 USER_STATE = {}
