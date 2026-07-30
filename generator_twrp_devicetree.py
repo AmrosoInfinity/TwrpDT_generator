@@ -13,18 +13,12 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # ==============================================================================
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
-BP_TOKEN= os.environ.get("BP_TOKEN", "")       
+BP_TOKEN = os.environ.get("BP_TOKEN", "")       
 SESSION_STRING = os.environ.get("SESSION_STRING", "") 
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
-# Masukkan semua ID grup yang terdeteksi di log beserta grup utama Anda
-ALLOWED_GROUP_IDS = [
-    -1003760536755,  # Grup Tester utama Anda
-    -1002315945162,  # ID grup pertama yang muncul di error log
-    -1002441759860   # ID grup kedua yang muncul di error log
-]
-
+# Pembatasan grup dihapus total (bebas digunakan di grup mana saja)
 USER_STATE = {}
 PORT_MEMORY = {}
 
@@ -52,12 +46,6 @@ userbot_worker = Client(
 # ==============================================================================
 @bot_ui.on_message(filters.command(["dt", "start"], prefixes=["/", ".", "!"]))
 async def start_menu(client, message):
-    chat_id = message.chat.id
-    
-    # Validasi ketat: Abaikan jika dari grup lain
-    if message.chat.type in ["supergroup", "group"] and chat_id not in ALLOWED_GROUP_IDS:
-        return
-
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛠️ TWRP DT (Android 8 - 11)", callback_data="menu_twrp")],
         [InlineKeyboardButton("🚀 AOSP DT (Android 12+ GKI)", callback_data="menu_aosp")],
@@ -99,12 +87,6 @@ async def button_handler(client, callback_query):
 # ==============================================================================
 @userbot_worker.on_message(filters.document)
 async def handle_document(client, message):
-    chat_id = message.chat.id
-    
-    # Mutlak abaikan pesan dokumen dari luar grup yang diizinkan untuk mencegah error peer
-    if chat_id not in ALLOWED_GROUP_IDS:
-        return
-
     user_id = message.from_user.id if message.from_user else None
     if not user_id or user_id not in USER_STATE:
         return 
