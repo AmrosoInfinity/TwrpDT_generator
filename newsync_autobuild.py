@@ -1,3 +1,9 @@
+# ==============================================================================
+# RADAR LOGGING (HARUS DI PALING ATAS)
+# ==============================================================================
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
 import os
 import shutil
 import subprocess
@@ -35,9 +41,6 @@ PORT_MEMORY = {}
 # ==============================================================================
 # INISIALISASI DUAL-CLIENT (BOT UI & USERBOT WORKER)
 # ==============================================================================
-# PENTING: in_memory=True dihapus agar Pyrogram membuat file .session 
-# sebagai database cache peer ID (mencegah error "Peer id invalid")
-
 bot_ui = Client(
     "bot_ui_session",
     api_id=API_ID,
@@ -68,7 +71,6 @@ async def cctv_bot(client, message):
     print(f"Teks: {message.text or 'Bukan teks (Media/System)'}", flush=True)
     print(f"Chat ID: {message.chat.id} | Tipe: {message.chat.type}", flush=True)
     print("==================================================\n", flush=True)
-
 
 # ==============================================================================
 # HANDLER: BOT UI (Menampilkan Tombol Pilihan Menu & Porting)
