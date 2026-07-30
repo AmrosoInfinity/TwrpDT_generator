@@ -1,0 +1,44 @@
+name: Extract DT TWRP 24/7
+
+on:
+  schedule:
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: telegram-userbot
+  cancel-in-progress: true 
+
+jobs:
+  run-userbot:
+    name: Running Pyrogram Userbot
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpio lz4 git
+
+      - name: Install Python Requirements
+        # tgcrypto: mempercepat unduhan file besar
+        # aospdtgen & twrpdtgen: Dual-engine untuk ekstraksi DT otomatis
+        run: pip install pyrogram tgcrypto twrpdtgen aospdtgen requests
+
+      - name: Start Telegram Userbot
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          python gendt.py
