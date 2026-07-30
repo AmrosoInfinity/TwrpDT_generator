@@ -29,7 +29,8 @@ jobs:
           sudo apt-get install -y cpio lz4 git
 
       - name: Install Python Requirements
-        run: pip install pyrogram tgcrypto twrpdtgen aospdtgen requests
+        # MENGGUNAKAN PYROFORK SEBAGAI PENGGANTI PYROGRAM ORIGINAL
+        run: pip install pyrofork tgcrypto twrpdtgen aospdtgen requests
 
       - name: Start Telegram Dual-Client Bot
         env:
