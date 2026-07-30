@@ -92,16 +92,15 @@ async def button_handler(client, callback_query):
 # ==============================================================================
 @userbot_worker.on_message(filters.document & (filters.private | filters.group))
 async def handle_document(client, message):
-    chat_id = message.chat.id
-    chat_type = message.chat.type
     user_id = message.from_user.id if message.from_user else None
 
     if not user_id or user_id not in USER_STATE:
         return 
 
-    if chat_type in ["supergroup", "group"]:
-        if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
-            return
+    # Validasi ID Grup langsung dari objek message tanpa query cache tambahan yang error
+    chat_id = message.chat.id
+    if ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS and message.chat.type != "private":
+        return
 
     file_name = message.document.file_name or ""
     if not file_name.lower().endswith('.img'):
