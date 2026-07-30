@@ -35,20 +35,21 @@ PORT_MEMORY = {}
 # ==============================================================================
 # INISIALISASI DUAL-CLIENT (BOT UI & USERBOT WORKER)
 # ==============================================================================
+# PENTING: in_memory=True dihapus agar Pyrogram membuat file .session 
+# sebagai database cache peer ID (mencegah error "Peer id invalid")
+
 bot_ui = Client(
     "bot_ui_session",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BP_TOKEN,
-    in_memory=True
+    bot_token=BP_TOKEN
 )
 
 userbot_worker = Client(
     "userbot_session",
     api_id=API_ID,
     api_hash=API_HASH,
-    session_string=SESSION_STRING,
-    in_memory=True
+    session_string=SESSION_STRING
 )
 
 # ==============================================================================
@@ -314,25 +315,35 @@ async def handle_document(client, message):
             shutil.rmtree(work_dir, ignore_errors=True)
 
 # ==============================================================================
-# MAIN RUNNER
+# MAIN RUNNER & AUTO SYNC DATABASE
 # ==============================================================================
 async def main():
     print("Menghidupkan Dual-Client (Bot UI & Userbot Worker)...", flush=True)
     
-    await asyncio.gather(
-        bot_ui.start(),
-        userbot_worker.start()
-    )
+    # Jalankan start() secara sekuensial agar session file terbuat dengan rapi
+    await bot_ui.start()
+    await userbot_worker.start()
     
     print("Dual-Client Berhasil Online dan Standby!", flush=True)
 
-    # Sinkronisasi cache peer grup agar aman dari error "Peer id invalid"
+    print("Memulai sinkronisasi Peer Database Userbot...", flush=True)
+    try:
+        # Memaksa Pyrogram menyimpan cache dari riwayat chat agar 'buku telepon' terisi
+        async for dialog in userbot_worker.get_dialogs(limit=100):
+            pass
+        print("Sinkronisasi riwayat dialog selesai.", flush=True)
+    except Exception as e:
+        print(f"Gagal sinkronisasi dialog: {e}", flush=True)
+
+    # Sinkronisasi manual khusus untuk grup yang diizinkan
     for gid in ALLOWED_GROUP_IDS:
         try:
             await userbot_worker.get_chat(gid)
-        except Exception:
-            pass
+            print(f"Sinkronisasi grup {gid} sukses.", flush=True)
+        except Exception as e:
+            print(f"Gagal sinkronisasi grup {gid}: {e}", flush=True)
 
+    print("\n✅ SISTEM SIAP! MENUNGGU PERINTAH DARI TELEGRAM...", flush=True)
     await idle()
     
     print("Mematikan klien...", flush=True)
@@ -343,4 +354,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Bot dihentikan.")
+        print("Bot dihentikan manual.")
