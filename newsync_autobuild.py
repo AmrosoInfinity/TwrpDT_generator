@@ -1,5 +1,5 @@
 # ==============================================================================
-# RADAR LOGGING (HARUS DI PALING ATAS)
+# RADAR LOGGING
 # ==============================================================================
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -12,11 +12,16 @@ import glob
 import random
 import string
 import asyncio
-from pyrogram import Client, filters, idle
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==============================================================================
-# KONFIGURASI ENVIRONMENT VARIABLES & PRINT DEBUG MENTAH
+# LIBRARY HYBRID (TELEBOT UNTUK UI, PYROGRAM UNTUK USERBOT)
+# ==============================================================================
+from pyrogram import Client, filters
+from telebot.async_telebot import AsyncTeleBot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+# ==============================================================================
+# KONFIGURASI ENVIRONMENT VARIABLES
 # ==============================================================================
 API_ID = int(os.environ.get("API_ID", 0))
 API_HASH = os.environ.get("API_HASH", "")
@@ -24,11 +29,6 @@ BP_TOKEN = os.environ.get("BP_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "") 
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
-
-# Print full debug mentah untuk memastikan secret terbaca di GitHub Actions
-print(f"DEBUG MENTAH BP_TOKEN (Full): '{BP_TOKEN}'", flush=True)
-print(f"DEBUG MENTAH API_ID: '{API_ID}'", flush=True)
-print(f"DEBUG MENTAH SESSION_STRING (15 char awal): '{SESSION_STRING[:15]}...'", flush=True)
 
 ALLOWED_GROUP_IDS = [
     -1003503670594,
@@ -39,15 +39,12 @@ USER_STATE = {}
 PORT_MEMORY = {}
 
 # ==============================================================================
-# INISIALISASI DUAL-CLIENT (BOT UI & USERBOT WORKER)
+# INISIALISASI HYBRID-ENGINE
 # ==============================================================================
-bot_ui = Client(
-    "bot_ui_session",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BP_TOKEN
-)
+# 1. BOT UI menggunakan HTTP API (Telebot) -> Kebal Banned/Ghost Session di GitHub Actions
+bot_ui = AsyncTeleBot(BP_TOKEN)
 
+# 2. USERBOT menggunakan MTProto (Pyrogram) -> Stabil dengan SESSION_STRING
 userbot_worker = Client(
     "userbot_session",
     api_id=API_ID,
@@ -56,71 +53,52 @@ userbot_worker = Client(
 )
 
 # ==============================================================================
-# CCTV SPY LOGGER (Bypass semua filter)
+# HANDLER: BOT UI (Menampilkan Tombol Pilihan Menu) - via TELEBOT
 # ==============================================================================
-# Hapus cache session kalau ada yang nyangkut di GitHub
-if os.path.exists("bot_ui_session.session"):
-    os.remove("bot_ui_session.session")
-if os.path.exists("userbot_session.session"):
-    os.remove("userbot_session.session")
-
-@bot_ui.on_message(filters.all, group=-1)
-async def cctv_bot(client, message):
-    print("\n==================================================", flush=True)
-    print(f"🚨 CCTV BOT NANGKAP PESAN!", flush=True)
-    print(f"Teks: {message.text or 'Bukan teks (Media/System)'}", flush=True)
-    print(f"Chat ID: {message.chat.id} | Tipe: {message.chat.type}", flush=True)
-    print("==================================================\n", flush=True)
-
-# ==============================================================================
-# HANDLER: BOT UI (Menampilkan Tombol Pilihan Menu & Porting)
-# ==============================================================================
-@bot_ui.on_message(filters.command(["dt", "dt_twrp", "start"], prefixes=["/", ".", "#"]))
-async def start_menu(client, message):
-    print(f"DEBUG: Pesan masuk diterima! Dari user: {message.from_user.id if message.from_user else 'Unknown'}, di chat: {message.chat.id} (Tipe: {message.chat.type})", flush=True)
-    
+@bot_ui.message_handler(commands=['start', 'dt', 'dt_twrp'])
+async def start_menu(message):
+    print(f"🚨 TELEBOT NANGKAP PESAN! Teks: {message.text}", flush=True)
     chat_id = message.chat.id
     
     if message.chat.type in ["supergroup", "group"] and ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
-        print(f"DEBUG: Chat ID {chat_id} ditolak karena tidak ada di ALLOWED_GROUP_IDS!", flush=True)
         return
 
-    print("DEBUG: Validasi grup lolos, mengirim menu tombol...", flush=True)
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🤖 Auto-Pilot (Smart DT Detection)", callback_data="mode_autopilot")],
-        [InlineKeyboardButton("🛠️ Force TWRP DT", callback_data="mode_twrp"),
-         InlineKeyboardButton("🚀 Force AOSP DT", callback_data="mode_aosp")],
-        [InlineKeyboardButton("🔄 Auto TWRP Porter", callback_data="mode_port")]
-    ])
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row(InlineKeyboardButton("🤖 Auto-Pilot (Smart DT Detection)", callback_data="mode_autopilot"))
+    keyboard.row(
+        InlineKeyboardButton("🛠️ Force TWRP DT", callback_data="mode_twrp"),
+        InlineKeyboardButton("🚀 Force AOSP DT", callback_data="mode_aosp")
+    )
+    keyboard.row(InlineKeyboardButton("🔄 Auto TWRP Porter", callback_data="mode_port"))
     
     teks = (
-        "🤖 **TWRP/AOSP Studio (Dual-Engine Mode)**\n\n"
+        "🤖 *TWRP/AOSP Studio (Dual-Engine Mode)*\n\n"
         "Silakan pilih mode operasi yang ingin Anda gunakan:"
     )
-    await message.reply_text(teks, reply_markup=keyboard)
+    await bot_ui.reply_to(message, teks, parse_mode="Markdown", reply_markup=keyboard)
 
 
-@bot_ui.on_callback_query()
-async def button_handler(client, callback_query):
-    user_id = callback_query.from_user.id
-    data = callback_query.data
+@bot_ui.callback_query_handler(func=lambda call: True)
+async def button_handler(call):
+    user_id = call.from_user.id
+    data = call.data
 
     if data == "mode_autopilot":
         USER_STATE[user_id] = "autopilot"
-        await callback_query.message.edit_text("✅ **Mode:** `Auto-Pilot DT`\n\n🟢 *Gerbang terbuka! Silakan kirim file partisi `.img` Anda.*")
+        await bot_ui.edit_message_text("✅ *Mode:* `Auto-Pilot DT`\n\n🟢 _Gerbang terbuka! Silakan kirim file partisi .img Anda._", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
     elif data == "mode_twrp":
         USER_STATE[user_id] = "twrp"
-        await callback_query.message.edit_text("✅ **Mode:** `Force TWRP DT`\n\n🟢 *Gerbang terbuka! Silakan kirim file partisi `.img` Anda.*")
+        await bot_ui.edit_message_text("✅ *Mode:* `Force TWRP DT`\n\n🟢 _Gerbang terbuka! Silakan kirim file partisi .img Anda._", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
     elif data == "mode_aosp":
         USER_STATE[user_id] = "aosp"
-        await callback_query.message.edit_text("✅ **Mode:** `Force AOSP DT`\n\n🟢 *Gerbang terbuka! Silakan kirim file partisi `.img` Anda.*")
+        await bot_ui.edit_message_text("✅ *Mode:* `Force AOSP DT`\n\n🟢 _Gerbang terbuka! Silakan kirim file partisi .img Anda._", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
     elif data == "mode_port":
         USER_STATE[user_id] = "port_step1"
-        await callback_query.message.edit_text("🔄 **Mode: Auto TWRP Porter**\n\n🟢 **Langkah 1:** *Silakan kirimkan file STOCK RECOVERY Anda terlebih dahulu.*")
+        await bot_ui.edit_message_text("🔄 *Mode: Auto TWRP Porter*\n\n🟢 *Langkah 1:* _Silakan kirimkan file STOCK RECOVERY Anda terlebih dahulu._", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
+
 
 # ==============================================================================
-# HANDLER: USERBOT WORKER (Eksekusi Device Tree & Auto Porter)
+# HANDLER: USERBOT WORKER (Eksekusi File .img) - via PYROGRAM
 # ==============================================================================
 @userbot_worker.on_message(filters.document & (filters.private | filters.group))
 async def handle_document(client, message):
@@ -139,9 +117,6 @@ async def handle_document(client, message):
 
     current_state = USER_STATE.get(user_id)
 
-    # --------------------------------------------------------------------------
-    # LOGIKA PORTING (LANGKAH 1: STOCK RECOVERY)
-    # --------------------------------------------------------------------------
     if current_state == "port_step1":
         rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         work_dir = f"port_workspace_{rand_id}"
@@ -155,9 +130,6 @@ async def handle_document(client, message):
         await msg.edit_text("✅ **Stock Recovery Diterima!**\n\n🟢 **Langkah 2:** *Sekarang kirim file PORT RECOVERY.*")
         return
 
-    # --------------------------------------------------------------------------
-    # LOGIKA PORTING (LANGKAH 2: PORT RECOVERY & EKSEKUSI PORTER.SH)
-    # --------------------------------------------------------------------------
     elif current_state == "port_step2":
         stock_path = PORT_MEMORY.pop(user_id, None)
         USER_STATE.pop(user_id, None)
@@ -187,9 +159,6 @@ async def handle_document(client, message):
         shutil.rmtree(work_dir, ignore_errors=True)
         return
 
-    # --------------------------------------------------------------------------
-    # LOGIKA GENERATOR DEVICE TREE (TWRP / AOSP / AUTOPILOT)
-    # --------------------------------------------------------------------------
     selected_mode = USER_STATE.pop(user_id, "autopilot")
     msg = await message.reply_text("⏳ **File diterima oleh Userbot!**\nMemulai unduhan...")
 
@@ -335,20 +304,14 @@ async def handle_document(client, message):
             shutil.rmtree(work_dir, ignore_errors=True)
 
 # ==============================================================================
-# MAIN RUNNER & AUTO SYNC DATABASE
+# MAIN RUNNER (MENJALANKAN DUA MESIN BERSAMAAN)
 # ==============================================================================
 async def main():
-    print("Menghidupkan Dual-Client (Bot UI & Userbot Worker)...", flush=True)
+    print("Menghidupkan Hybrid-Engine (Telebot & Pyrogram)...", flush=True)
     
-    await bot_ui.start()
-    bot_info = await bot_ui.get_me()
-    print("\n==================================================", flush=True)
-    print(f"🤖 BOT UI BENERAN LOGIN SEBAGAI: @{bot_info.username}", flush=True)
-    print("==================================================\n", flush=True)
-
+    # Mulai Userbot
     await userbot_worker.start()
-    user_info = await userbot_worker.get_me()
-    print(f"👤 USERBOT LOGIN SEBAGAI: {user_info.first_name}", flush=True)
+    print("👤 USERBOT ONLINE (MTProto)", flush=True)
     
     print("Memulai sinkronisasi Peer Database Userbot...", flush=True)
     try:
@@ -365,10 +328,11 @@ async def main():
             pass
 
     print("\n✅ SISTEM SIAP! MENUNGGU PERINTAH DARI TELEGRAM...", flush=True)
-    await idle()
     
-    print("Mematikan klien...", flush=True)
-    await bot_ui.stop()
+    # Mulai Bot UI dengan Polling HTTP (Ini akan berjalan terus menerus / nge-block)
+    await bot_ui.polling(non_stop=True, request_timeout=60)
+    
+    # Kalau polling berhenti (misal kena interupsi), stop userbot
     await userbot_worker.stop()
 
 if __name__ == "__main__":
