@@ -56,10 +56,15 @@ userbot_worker = Client(
 # ==============================================================================
 @bot_ui.on_message(filters.command(["dt", "dt_twrp", "start"], prefixes=["/", ".", "#"]))
 async def start_menu(client, message):
+    print(f"DEBUG: Pesan masuk diterima! Dari user: {message.from_user.id if message.from_user else 'Unknown'}, di chat: {message.chat.id} (Tipe: {message.chat.type})", flush=True)
+    
     chat_id = message.chat.id
     
     if message.chat.type in ["supergroup", "group"] and ALLOWED_GROUP_IDS and chat_id not in ALLOWED_GROUP_IDS:
+        print(f"DEBUG: Chat ID {chat_id} ditolak karena tidak ada di ALLOWED_GROUP_IDS!", flush=True)
         return
+
+    print("DEBUG: Validasi grup lolos, mengirim menu tombol...", flush=True)
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🤖 Auto-Pilot (Smart DT Detection)", callback_data="mode_autopilot")],
@@ -73,6 +78,7 @@ async def start_menu(client, message):
         "Silakan pilih mode operasi yang ingin Anda gunakan:"
     )
     await message.reply_text(teks, reply_markup=keyboard)
+
 
 @bot_ui.on_callback_query()
 async def button_handler(client, callback_query):
