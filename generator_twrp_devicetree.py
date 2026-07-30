@@ -18,8 +18,12 @@ SESSION_STRING = os.environ.get("SESSION_STRING", "")
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
-# HANYA SATU GRUP INI YANG DIIZINKAN (Grup Tester Anda)
-ALLOWED_GROUP_IDS = [-1003760536755]
+# Masukkan semua ID grup yang terdeteksi di log beserta grup utama Anda
+ALLOWED_GROUP_IDS = [
+    -1003760536755,  # Grup Tester utama Anda
+    -1002315945162,  # ID grup pertama yang muncul di error log
+    -1002441759860   # ID grup kedua yang muncul di error log
+]
 
 USER_STATE = {}
 PORT_MEMORY = {}
