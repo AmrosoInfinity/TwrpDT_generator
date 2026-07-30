@@ -5,7 +5,7 @@ import requests
 import random
 import string
 import asyncio
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==============================================================================
@@ -18,12 +18,11 @@ SESSION_STRING = os.environ.get("SESSION_STRING", "")
 GITHUB_USERNAME = os.environ.get("GH_USERNAME", "")
 GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
 
-# Pembatasan grup dihapus total (bebas digunakan di grup mana saja)
 USER_STATE = {}
 PORT_MEMORY = {}
 
 # ==============================================================================
-# INISIALISASI KLIEN
+# INISIALISASI DUAL-CLIENT (BOT UI & USERBOT WORKER)
 # ==============================================================================
 bot_ui = Client(
     "bot_ui_session",
@@ -42,7 +41,7 @@ userbot_worker = Client(
 )
 
 # ==============================================================================
-# HANDLER: BOT UI (Tombol Interaktif)
+# HANDLER: BOT UI (Tombol Interaktif & Menu)
 # ==============================================================================
 @bot_ui.on_message(filters.command(["dt", "start"], prefixes=["/", ".", "!"]))
 async def start_menu(client, message):
@@ -83,80 +82,84 @@ async def button_handler(client, callback_query):
         )
 
 # ==============================================================================
-# HANDLER: USERBOT WORKER (Menyambar File Dokumen)
+# HANDLER: USERBOT WORKER (Menyambar & Mengeksekusi File Dokumen)
 # ==============================================================================
 @userbot_worker.on_message(filters.document)
 async def handle_document(client, message):
-    user_id = message.from_user.id if message.from_user else None
-    if not user_id or user_id not in USER_STATE:
-        return 
+    try:
+        user_id = message.from_user.id if message.from_user else None
+        if not user_id or user_id not in USER_STATE:
+            return 
 
-    state = USER_STATE[user_id]
-    file_name = message.document.file_name or ""
-    
-    if not file_name.lower().endswith('.img'):
-        return
-
-    msg = await message.reply_text("⏳ **Userbot menyambar file Anda...**")
-
-    # MODE GENERATOR (TWRP / AOSP)
-    if state in ["twrp", "aosp"]:
-        USER_STATE.pop(user_id, None) 
-        engine = "twrpdtgen" if state == "twrp" else "aospdtgen"
+        state = USER_STATE[user_id]
+        file_name = message.document.file_name or ""
         
-        rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-        work_dir = f"workspace_{rand_id}"
-        os.makedirs(work_dir, exist_ok=True)
-        
-        file_path = await client.download_media(message, file_name=f"{work_dir}/source.img")
-        await msg.edit_text(f"⚙️ **Userbot mengekstrak via `{engine}`...**")
-        
-        output_dir = os.path.join(work_dir, "output")
-        result = subprocess.run(["python3", "-m", engine, file_path, "-o", output_dir], capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            await msg.edit_text(f"❌ **Userbot Gagal Ekstraksi!**\n`{result.stderr[:500]}`")
-            shutil.rmtree(work_dir, ignore_errors=True)
+        if not file_name.lower().endswith('.img'):
             return
+
+        msg = await message.reply_text("⏳ **Userbot menyambar file Anda...**")
+
+        # MODE GENERATOR (TWRP / AOSP)
+        if state in ["twrp", "aosp"]:
+            USER_STATE.pop(user_id, None) 
+            engine = "twrpdtgen" if state == "twrp" else "aospdtgen"
             
-        await msg.edit_text("✅ **Userbot Berhasil mengekstrak Device Tree!**")
-        shutil.rmtree(work_dir, ignore_errors=True)
+            rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            work_dir = f"workspace_{rand_id}"
+            os.makedirs(work_dir, exist_ok=True)
+            
+            file_path = await client.download_media(message, file_name=f"{work_dir}/source.img")
+            await msg.edit_text(f"⚙️ **Userbot mengekstrak via `{engine}`...**")
+            
+            output_dir = os.path.join(work_dir, "output")
+            result = subprocess.run(["python3", "-m", engine, file_path, "-o", output_dir], capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                await msg.edit_text(f"❌ **Userbot Gagal Ekstraksi!**\n`{result.stderr[:500]}`")
+                shutil.rmtree(work_dir, ignore_errors=True)
+                return
+                
+            await msg.edit_text("✅ **Userbot Berhasil mengekstrak Device Tree!**")
+            shutil.rmtree(work_dir, ignore_errors=True)
 
-    # MODE PORTING (LANGKAH 1)
-    elif state == "port_step1":
-        rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-        work_dir = f"port_workspace_{rand_id}"
-        os.makedirs(work_dir, exist_ok=True)
-        
-        stock_path = await client.download_media(message, file_name=f"{work_dir}/stock_recovery.img")
-        PORT_MEMORY[user_id] = stock_path
-        USER_STATE[user_id] = "port_step2"
-        
-        await msg.edit_text("✅ **Stock Recovery Diterima!**\n\n🟢 **Langkah 2:** *Sekarang kirim file PORT RECOVERY.*")
+        # MODE PORTING (LANGKAH 1)
+        elif state == "port_step1":
+            rand_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            work_dir = f"port_workspace_{rand_id}"
+            os.makedirs(work_dir, exist_ok=True)
+            
+            stock_path = await client.download_media(message, file_name=f"{work_dir}/stock_recovery.img")
+            PORT_MEMORY[user_id] = stock_path
+            USER_STATE[user_id] = "port_step2"
+            
+            await msg.edit_text("✅ **Stock Recovery Diterima!**\n\n🟢 **Langkah 2:** *Sekarang kirim file PORT RECOVERY.*")
 
-    # MODE PORTING (LANGKAH 2)
-    elif state == "port_step2":
-        stock_path = PORT_MEMORY.pop(user_id, None)
-        USER_STATE.pop(user_id, None)
-        
-        work_dir = os.path.dirname(stock_path)
-        port_path = await client.download_media(message, file_name=f"{work_dir}/port_recovery.img")
-        
-        await msg.edit_text("⚙️ **Menjalankan Auto Porter...**")
+        # MODE PORTING (LANGKAH 2)
+        elif state == "port_step2":
+            stock_path = PORT_MEMORY.pop(user_id, None)
+            USER_STATE.pop(user_id, None)
+            
+            work_dir = os.path.dirname(stock_path)
+            port_path = await client.download_media(message, file_name=f"{work_dir}/port_recovery.img")
+            
+            await msg.edit_text("⚙️ **Menjalankan Auto Porter...**")
 
-        port_result = subprocess.run(["bash", "porter.sh", stock_path, port_path, work_dir], capture_output=True, text=True)
+            port_result = subprocess.run(["bash", "porter.sh", stock_path, port_path, work_dir], capture_output=True, text=True)
 
-        if port_result.returncode == 0:
-            output_img = f"{work_dir}/twrp_ported.img"
-            if os.path.exists(output_img):
-                await msg.edit_text("✅ **Porting Berhasil! Mengirim file hasil...**")
-                await client.send_document(chat_id=message.chat.id, document=output_img)
+            if port_result.returncode == 0:
+                output_img = f"{work_dir}/twrp_ported.img"
+                if os.path.exists(output_img):
+                    await msg.edit_text("✅ **Porting Berhasil! Mengirim file hasil...**")
+                    await client.send_document(chat_id=message.chat.id, document=output_img)
+                else:
+                    await msg.edit_text("❌ Proses selesai tapi file output `twrp_ported.img` tidak ditemukan.")
             else:
-                await msg.edit_text("❌ Proses selesai tapi file output `twrp_ported.img` tidak ditemukan.")
-        else:
-            await msg.edit_text(f"❌ **Porting Gagal!**\n`{port_result.stderr[:500]}`")
+                await msg.edit_text(f"❌ **Porting Gagal!**\n`{port_result.stderr[:500]}`")
+                
+            shutil.rmtree(work_dir, ignore_errors=True)
             
-        shutil.rmtree(work_dir, ignore_errors=True)
+    except Exception as e:
+        print(f"Error handler: {e}")
 
 # ==============================================================================
 # MAIN RUNNER
@@ -167,8 +170,11 @@ async def main():
     await userbot_worker.start()
     print("Kedua Client Berhasil Online dan Standby!")
     
-    while True:
-        await asyncio.sleep(3600)
+    # Mengunci event loop agar interaksi bot dan userbot tetap aktif mendengar pesan
+    await idle()
+    
+    await bot_ui.stop()
+    await userbot_worker.stop()
 
 if __name__ == "__main__":
     try:
